@@ -284,9 +284,9 @@ $current_page = isset($_GET['page']) ? $_GET['page'] : 'modules--initialize-fail
 
   <div class="row justify-content-center">
     <div>
-      <div class="d-grid">
+      <div class="d-grid gap-3 gap-lg-4">
         <!-- table  -->
-        <div class="card mb-lg-5">
+        <div class="card">
           <div class="card-header">
             <div class="row justify-content-between align-items-center flex-grow-1">
               <div class="col-md">
@@ -557,7 +557,7 @@ echo ($failed_offset + $items_per_page < $total_failed_transactions) ? $url : 'j
         </div>
 
         <!-- Initialize Transaction Table -->
-        <div class="card mb-lg-5">
+        <div class="card">
           <div class="card-header">
             <div class="row justify-content-between align-items-center flex-grow-1">
               <div class="col-md">
@@ -640,7 +640,7 @@ echo ($failed_offset + $items_per_page < $total_failed_transactions) ? $url : 'j
                   </td>
                   <td>
                     <span
-                      class="badge bg-warning"><?php echo htmlspecialchars($transaction['transaction_status']); ?></span>
+                      class="badge bg-info"><?php echo htmlspecialchars($transaction['transaction_status']); ?></span>
                   </td>
                   <td>
                     <div class="btn-group" role="group">
@@ -817,7 +817,7 @@ echo ($initialize_offset + $items_per_page < $total_initialize_transactions) ? $
       </div>
 
       <!-- Done Transaction Table -->
-      <div class="card mb-lg-5">
+      <div class="card">
         <div class="card-header">
           <div class="row justify-content-between align-items-center flex-grow-1">
             <div class="col-md">
@@ -882,7 +882,7 @@ echo ($initialize_offset + $items_per_page < $total_initialize_transactions) ? $
                     echo '<tr><td colspan="6" class="text-center">No transactions found.</td></tr>';
                 } else {
                     foreach ($done_transactions as $transaction) {
-                        $status_class = $transaction['transaction_status'] === 'failed' ? 'bg-danger' : 'bg-warning';
+                        $status_class = $transaction['transaction_status'] === 'failed' ? 'bg-danger' : 'bg-info';
                         ?>
               <tr>
                 <td>
