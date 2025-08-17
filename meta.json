@@ -1,0 +1,6 @@
+{
+  "type": "plugins",
+  "slug": "initialize-failed-transactions",
+  "name": "Initialize & Failed Transactions",
+  "mrdr": "modules"
+}
