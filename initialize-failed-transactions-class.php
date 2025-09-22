@@ -7,7 +7,7 @@ if (!defined('pp_allowed_access')) {
 $plugin_meta = [
     'Plugin Name'       => 'Initialize & Failed Transactions',
     'Description'       => 'Initialize & Failed Transactions is a powerful PipraPay plugin that provides detailed transaction analytics of initialize and failed transactions to the PipraPay Payment Panel App — completely free.',
-    'Version'           => '1.0.0',
+    'Version'           => '2.0.0',
     'Author'            => 'Nabil Newaz',
     'Author URI'        => 'https://nabilnewaz.com/',
     'License'           => 'GPL-2.0+',

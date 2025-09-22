@@ -4,7 +4,7 @@ Donate link: https://nabilnewaz.com/donate
 Tags: analytics, payment analytics, transaction tracking
 Requires at least: 1.0.0
 Tested up to: 1.0.0
-Stable tag: 1.0.0
+Stable tag: 2.0.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,5 +24,5 @@ Initialize and Failed Analytics is a powerful PipraPay plugin that provides deta
 
 == Changelog ==
 
-= 1.0.0 =
-* Initial release
+= 2.0.0 =
+* Second release

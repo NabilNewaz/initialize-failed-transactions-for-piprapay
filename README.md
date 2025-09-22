@@ -2,7 +2,7 @@
 
 **Plugin Name:** Initialize Failed Analytics
 **Description:** Initialize and Failed Analytics is a powerful PipraPay plugin that provides detailed transaction analytics of initialize and failed transactions to the PipraPay Payment Panel App — completely free.
-**Version:** 1.0.0  
+**Version:** 2.0.0  
 **Author:** [Nabil Newaz](https://nabilnewaz.com/)  
 **License:** [GPL-2.0+](https://www.gnu.org/licenses/gpl-2.0.html)  
 **Requires PHP:** 7.4+  
