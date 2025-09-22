@@ -412,9 +412,25 @@ if (isset($conn) && !$conn->connect_error) {
       .then(res => res.json())
       .then(response => {
         if (response.status === 'success') {
-          renderTransactionTable(tableBodyId, response.data.transactions, tableType);
-          renderPagination(tableType, response.data.pagination);
-          updatePaginationInfo(tableType, response.data.pagination);
+          const {
+            transactions,
+            pagination
+          } = response.data;
+
+          // Check if current page is empty but there are other pages available
+          if ((!transactions || transactions.length === 0) && pagination.total_count > 0 && pagination.current_page >
+            1) {
+            // Redirect to the last available page
+            const lastPage = Math.max(1, pagination.total_pages);
+            if (pagination.current_page > lastPage) {
+              // Current page is beyond available pages, go to last page
+              return loadTransactionTable(tableType, tableBodyId, lastPage, window.tableStates[tableType].search);
+            }
+          }
+
+          renderTransactionTable(tableBodyId, transactions, tableType);
+          renderPagination(tableType, pagination);
+          updatePaginationInfo(tableType, pagination);
         } else {
           document.getElementById(tableBodyId).innerHTML =
             `<tr><td colspan="6" class="text-center text-danger">Error: ${response.message}</td></tr>`;
