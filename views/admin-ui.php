@@ -393,34 +393,113 @@ if (empty($auth_id)) {
     }
   };
 
+  // Wait for DOM elements to be available
+  function waitForElements(selectors, maxAttempts = 50, interval = 100) {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+
+      function checkElements() {
+        attempts++;
+
+        const allElementsExist = selectors.every(selector => {
+          const element = document.getElementById(selector);
+          return element !== null;
+        });
+
+        if (allElementsExist) {
+          resolve(true);
+        } else if (attempts >= maxAttempts) {
+          console.error(`Failed to find all elements after ${maxAttempts} attempts. Missing elements:`,
+            selectors.filter(selector => !document.getElementById(selector)));
+          reject(new Error('Required DOM elements not found'));
+        } else {
+          setTimeout(checkElements, interval);
+        }
+      }
+
+      checkElements();
+    });
+  }
+
+  // Test API connectivity
+  function testApiConnectivity() {
+    const testUrl =
+      "<?php echo $plugin_url; ?>/views/fi_api.php?action=get_counts&auth_id=<?php echo $auth_id; ?>";
+
+    return fetch(testUrl)
+      .then(res => {
+        return res.json();
+      })
+      .then(data => {
+        return data.status === 'success';
+      })
+      .catch(error => {
+        console.error('API Test Failed:', error);
+        return false;
+      });
+  }
+
   function initializeApp() {
-    console.log('Initializing app...');
 
-    // Clear any existing timeouts
-    if (window.initTimeout) {
-      clearTimeout(window.initTimeout);
-    }
+    // Define required DOM elements
+    const requiredElements = [
+      'datatable',
+      'initializeTableBody',
+      'doneTableBody',
+      'datatable_pagination',
+      'initialize_pagination',
+      'done_pagination',
+      'showing-result',
+      'showing-result-initialize',
+      'showing-result-done',
+      'total-result',
+      'total-result-initialize',
+      'total-result-done'
+    ];
 
-    // Load all transaction tables with current state
-    const failedState = window.tableStates?.failed || {
-      page: 1,
-      search: ''
-    };
-    const initializeState = window.tableStates?.initialize || {
-      page: 1,
-      search: ''
-    };
-    const doneState = window.tableStates?.done || {
-      page: 1,
-      search: ''
-    };
+    // Wait for DOM elements to be available
+    waitForElements(requiredElements)
+      .then(() => {
 
-    loadTransactionTable('failed', 'datatable', failedState.page, failedState.search);
-    loadTransactionTable('initialize', 'initializeTableBody', initializeState.page, initializeState.search);
-    loadTransactionTable('done', 'doneTableBody', doneState.page, doneState.search);
 
-    // Setup search functionality
-    setupSearchListeners();
+        // API connectivity test completed
+
+
+        // Clear any existing timeouts
+        if (window.initTimeout) {
+          clearTimeout(window.initTimeout);
+        }
+
+        // Load all transaction tables with current state
+        const failedState = window.tableStates?.failed || {
+          page: 1,
+          search: ''
+        };
+        const initializeState = window.tableStates?.initialize || {
+          page: 1,
+          search: ''
+        };
+        const doneState = window.tableStates?.done || {
+          page: 1,
+          search: ''
+        };
+
+        loadTransactionTable('failed', 'datatable', failedState.page, failedState.search);
+        loadTransactionTable('initialize', 'initializeTableBody', initializeState.page, initializeState.search);
+        loadTransactionTable('done', 'doneTableBody', doneState.page, doneState.search);
+
+        // Setup search functionality
+        setupSearchListeners();
+      })
+      .catch(error => {
+        console.error('Failed to initialize app:', error);
+        console.error('This usually means the HTML content is not loaded yet or the page structure has changed');
+
+        // Try again after a longer delay
+        setTimeout(() => {
+          initializeApp();
+        }, 2000);
+      });
   }
 
   // Initialize when DOM is ready
@@ -438,7 +517,6 @@ if (empty($auth_id)) {
     // This event fires when navigating back to the page
     if (event.persisted || performance.navigation.type === 2) {
       // Page was loaded from cache or user navigated back
-      console.log('Page restored from cache or back navigation detected');
       initializeApp();
     }
   });
@@ -447,7 +525,6 @@ if (empty($auth_id)) {
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
       // Page became visible, check if we need to reload data
-      console.log('Page became visible');
       // Only reload if tables are showing loading state
       const failedTable = document.getElementById('datatable');
       const initializeTable = document.getElementById('initializeTableBody');
@@ -458,7 +535,6 @@ if (empty($auth_id)) {
       };
 
       if (isShowingLoading(failedTable) || isShowingLoading(initializeTable) || isShowingLoading(doneTable)) {
-        console.log('Tables showing loading state, reinitializing...');
         initializeApp();
       }
     }
@@ -466,7 +542,6 @@ if (empty($auth_id)) {
 
   // Handle popstate (browser back/forward buttons)
   window.addEventListener('popstate', function(event) {
-    console.log('Popstate event detected');
     // Small delay to ensure page is ready
     setTimeout(function() {
       initializeApp();
@@ -485,7 +560,6 @@ if (empty($auth_id)) {
       };
 
       if (isStuckLoading(failedTable) || isStuckLoading(initializeTable) || isStuckLoading(doneTable)) {
-        console.log('Tables stuck in loading state, forcing reload...');
         initializeApp();
       }
     }, 2000);
@@ -508,7 +582,6 @@ if (empty($auth_id)) {
                 'doneTableBody');
 
               if (hasFailedTable || hasInitTable || hasDoneTable) {
-                console.log('Plugin content detected via MutationObserver, initializing...');
                 // Small delay to ensure DOM is fully rendered
                 setTimeout(function() {
                   initializeApp();
@@ -545,9 +618,13 @@ if (empty($auth_id)) {
 
     const apiUrl = "<?php echo $plugin_url; ?>/views/fi_api.php?" + params
       .toString();
-
     return fetch(apiUrl)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        return res.json();
+      })
       .then(response => {
         if (response.status === 'success') {
           const {
@@ -570,18 +647,27 @@ if (empty($auth_id)) {
           renderPagination(tableType, pagination);
           updatePaginationInfo(tableType, pagination);
         } else {
-          document.getElementById(tableBodyId).innerHTML =
-            `<tr><td colspan="6" class="text-center text-danger">Error: ${response.message}</td></tr>`;
+          const tableBody = document.getElementById(tableBodyId);
+          if (tableBody) {
+            tableBody.innerHTML =
+              `<tr><td colspan="6" class="text-center text-danger">Error: ${response.message}</td></tr>`;
+          } else {
+            console.error(`Cannot display API error - table body element not found: ${tableBodyId}`);
+          }
         }
       })
       .catch(error => {
-        document.getElementById(tableBodyId).innerHTML =
-          `<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>`;
+        console.error('Error loading data:', error);
       });
   }
 
   function renderTransactionTable(tableBodyId, transactions, tableType) {
     const tableBody = document.getElementById(tableBodyId);
+
+    if (!tableBody) {
+      console.error(`Table body element not found: ${tableBodyId}`);
+      return;
+    }
 
     if (!transactions || transactions.length === 0) {
       tableBody.innerHTML = '<tr><td colspan="6" class="text-center">No transactions found.</td></tr>';
@@ -610,6 +696,12 @@ if (empty($auth_id)) {
     const paginationContainer = document.getElementById(paginationId);
 
     if (!paginationContainer) {
+      console.error(`Pagination container not found: ${paginationId}`);
+      return;
+    }
+
+    if (!pagination) {
+      console.error('Pagination data is null or undefined');
       return;
     }
 
@@ -730,15 +822,13 @@ if (empty($auth_id)) {
                   </div>
     `;
 
-    if (tableType === 'failed' || tableType === 'done') {
-      buttons += `
+    buttons += `
             <div onclick="load_content('View Transaction','view-transaction?ref=${transaction.id}','nav-btn-transaction')" class="btn-group" role="group">
                 <a class="btn btn-white btn-sm">
                     <i class="bi-eye me-1"></i> View
                 </a>
               </div>
         `;
-    }
 
     if (tableType === 'failed' || tableType === 'initialize') {
       buttons += `
@@ -754,14 +844,28 @@ if (empty($auth_id)) {
   }
 
   function updatePaginationInfo(tableType, pagination) {
+    if (!pagination) {
+      console.error('Pagination data is null or undefined in updatePaginationInfo');
+      return;
+    }
+
     const showingId = getShowingResultId(tableType);
     const totalId = getTotalResultId(tableType);
 
     const showingElement = document.getElementById(showingId);
     const totalElement = document.getElementById(totalId);
 
-    if (showingElement) showingElement.textContent = `${pagination.start_item}-${pagination.end_item}`;
-    if (totalElement) totalElement.textContent = pagination.total_count;
+    if (showingElement) {
+      showingElement.textContent = `${pagination.start_item}-${pagination.end_item}`;
+    } else {
+      console.error(`Showing element not found: ${showingId}`);
+    }
+
+    if (totalElement) {
+      totalElement.textContent = pagination.total_count;
+    } else {
+      console.error(`Total element not found: ${totalId}`);
+    }
   }
 
   function getShowingResultId(tableType) {
@@ -922,7 +1026,6 @@ if (empty($auth_id)) {
     let metadataObj;
     try {
       metadataObj = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
-      console.log('Parsed metadata:', metadataObj);
     } catch (e) {
       console.error('Error parsing metadata:', e);
       metadataObj = {
@@ -987,37 +1090,30 @@ if (empty($auth_id)) {
       return;
     }
 
-    console.log('Showing modal...');
-
     // Try different methods to show modal
     if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
       try {
         const modal = new bootstrap.Modal(modalElement);
         modal.show();
-        console.log('Modal shown with Bootstrap');
       } catch (e) {
         console.error('Bootstrap modal error:', e);
         // Fallback to jQuery
         if (typeof $ !== 'undefined') {
           $('#metadataModal').modal('show');
-          console.log('Modal shown with jQuery');
         } else {
           // Manual fallback
           modalElement.style.display = 'block';
           modalElement.classList.add('show');
           document.body.classList.add('modal-open');
-          console.log('Modal shown manually');
         }
       }
     } else if (typeof $ !== 'undefined') {
       $('#metadataModal').modal('show');
-      console.log('Modal shown with jQuery');
     } else {
       // Manual fallback
       modalElement.style.display = 'block';
       modalElement.classList.add('show');
       document.body.classList.add('modal-open');
-      console.log('Modal shown manually');
     }
   };
 
@@ -1244,8 +1340,6 @@ if (empty($auth_id)) {
 <script>
   // Modal functions (keep existing functionality)
   function showMetadataModal(metadata) {
-    console.log('showMetadataModal called with:', metadata);
-
     if (event) event.stopPropagation(); // Prevent the row click event
     const tableBody = document.getElementById('metadataTableBody');
 
@@ -1260,7 +1354,6 @@ if (empty($auth_id)) {
     let metadataObj;
     try {
       metadataObj = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
-      console.log('Parsed metadata:', metadataObj);
     } catch (e) {
       console.error('Error parsing metadata:', e);
       metadataObj = {
@@ -1321,8 +1414,6 @@ if (empty($auth_id)) {
       return;
     }
 
-    console.log('Showing modal...');
-
     // Check if Bootstrap is available
     if (typeof bootstrap === 'undefined') {
       console.error('Bootstrap is not loaded');
@@ -1339,7 +1430,6 @@ if (empty($auth_id)) {
     try {
       const modal = new bootstrap.Modal(modalElement);
       modal.show();
-      console.log('Modal shown successfully');
     } catch (e) {
       console.error('Error showing modal:', e);
       // Fallback
