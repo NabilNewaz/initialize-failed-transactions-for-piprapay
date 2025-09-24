@@ -51,9 +51,32 @@ if (!isset($conn)) {
 }
 
 if (isset($conn) && !$conn->connect_error) {
-    $auth_id = uniqid();
-    $sql = "UPDATE {$db_prefix}plugins SET plugin_array = '{\"auth_id\":\"$auth_id\"}' WHERE plugin_slug = '{$plugin_slug}'";
-    $result = $conn->query($sql);
+    // First, check if auth_id already exists
+    $check_sql = "SELECT plugin_array FROM {$db_prefix}plugins WHERE plugin_slug = '{$plugin_slug}'";
+    $check_result = $conn->query($check_sql);
+
+    $auth_id = null;
+    if ($check_result && $check_result->num_rows > 0) {
+        $row = $check_result->fetch_assoc();
+        if (!empty($row['plugin_array'])) {
+            $plugin_data = json_decode($row['plugin_array'], true);
+            if (isset($plugin_data['auth_id']) && !empty($plugin_data['auth_id'])) {
+                $auth_id = $plugin_data['auth_id'];
+            }
+        }
+    }
+
+    // Generate new auth_id only if it doesn't exist
+    if (empty($auth_id)) {
+        $auth_id = uniqid();
+        $sql = "UPDATE {$db_prefix}plugins SET plugin_array = '{\"auth_id\":\"$auth_id\"}' WHERE plugin_slug = '{$plugin_slug}'";
+        $result = $conn->query($sql);
+    }
+}
+
+// Fallback: ensure we always have an auth_id
+if (empty($auth_id)) {
+    $auth_id = 'fallback_' . uniqid();
 }
 ?>
 
@@ -371,10 +394,30 @@ if (isset($conn) && !$conn->connect_error) {
   };
 
   function initializeApp() {
-    // Load all transaction tables
-    loadTransactionTable('failed', 'datatable', 1);
-    loadTransactionTable('initialize', 'initializeTableBody', 1);
-    loadTransactionTable('done', 'doneTableBody', 1);
+    console.log('Initializing app...');
+
+    // Clear any existing timeouts
+    if (window.initTimeout) {
+      clearTimeout(window.initTimeout);
+    }
+
+    // Load all transaction tables with current state
+    const failedState = window.tableStates?.failed || {
+      page: 1,
+      search: ''
+    };
+    const initializeState = window.tableStates?.initialize || {
+      page: 1,
+      search: ''
+    };
+    const doneState = window.tableStates?.done || {
+      page: 1,
+      search: ''
+    };
+
+    loadTransactionTable('failed', 'datatable', failedState.page, failedState.search);
+    loadTransactionTable('initialize', 'initializeTableBody', initializeState.page, initializeState.search);
+    loadTransactionTable('done', 'doneTableBody', doneState.page, doneState.search);
 
     // Setup search functionality
     setupSearchListeners();
@@ -388,6 +431,101 @@ if (isset($conn) && !$conn->connect_error) {
   // Also try immediate if already loaded
   if (document.readyState !== 'loading') {
     initializeApp();
+  }
+
+  // Handle browser back/forward navigation
+  window.addEventListener('pageshow', function(event) {
+    // This event fires when navigating back to the page
+    if (event.persisted || performance.navigation.type === 2) {
+      // Page was loaded from cache or user navigated back
+      console.log('Page restored from cache or back navigation detected');
+      initializeApp();
+    }
+  });
+
+  // Handle page visibility changes (when tab becomes active again)
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      // Page became visible, check if we need to reload data
+      console.log('Page became visible');
+      // Only reload if tables are showing loading state
+      const failedTable = document.getElementById('datatable');
+      const initializeTable = document.getElementById('initializeTableBody');
+      const doneTable = document.getElementById('doneTableBody');
+
+      const isShowingLoading = (table) => {
+        return table && table.innerHTML.includes('Loading...');
+      };
+
+      if (isShowingLoading(failedTable) || isShowingLoading(initializeTable) || isShowingLoading(doneTable)) {
+        console.log('Tables showing loading state, reinitializing...');
+        initializeApp();
+      }
+    }
+  });
+
+  // Handle popstate (browser back/forward buttons)
+  window.addEventListener('popstate', function(event) {
+    console.log('Popstate event detected');
+    // Small delay to ensure page is ready
+    setTimeout(function() {
+      initializeApp();
+    }, 100);
+  });
+
+  // Additional fallback: Check if tables are stuck in loading state after 2 seconds
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      const failedTable = document.getElementById('datatable');
+      const initializeTable = document.getElementById('initializeTableBody');
+      const doneTable = document.getElementById('doneTableBody');
+
+      const isStuckLoading = (table) => {
+        return table && table.innerHTML.includes('Loading...') && table.innerHTML.includes('spinner-border');
+      };
+
+      if (isStuckLoading(failedTable) || isStuckLoading(initializeTable) || isStuckLoading(doneTable)) {
+        console.log('Tables stuck in loading state, forcing reload...');
+        initializeApp();
+      }
+    }, 2000);
+  });
+
+  // Handle dynamic content loading (for AJAX-based navigation systems)
+  // This creates a MutationObserver to detect when the plugin content is loaded
+  if (typeof window.pluginContentObserver === 'undefined') {
+    window.pluginContentObserver = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        // Check if nodes were added that contain our plugin content
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          for (let node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // Check if the added content contains our tables
+              const hasFailedTable = node.querySelector('#datatable') || node.getElementById?.('datatable');
+              const hasInitTable = node.querySelector('#initializeTableBody') || node.getElementById?.(
+                'initializeTableBody');
+              const hasDoneTable = node.querySelector('#doneTableBody') || node.getElementById?.(
+                'doneTableBody');
+
+              if (hasFailedTable || hasInitTable || hasDoneTable) {
+                console.log('Plugin content detected via MutationObserver, initializing...');
+                // Small delay to ensure DOM is fully rendered
+                setTimeout(function() {
+                  initializeApp();
+                }, 50);
+                break;
+              }
+            }
+          }
+        }
+      });
+    });
+
+    // Start observing changes to the document body
+    window.pluginContentObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
   }
 
   function loadTransactionTable(tableType, tableBodyId, page = 1, search = '') {
@@ -959,10 +1097,17 @@ if (isset($conn) && !$conn->connect_error) {
       window.handleConfirmClick(e);
     }
 
-    // Handle refresh button clicks
-    if (e.target.matches('#refreshData') || e.target.closest('#refreshData')) {
+    // Handle refresh button click
+    document.getElementById('refreshData').addEventListener('click', function() {
+      // Add loading state
+      const button = this;
+      const originalContent = button.innerHTML;
+      button.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Loading...';
+      button.disabled = true;
+
+      // Reload the page
       window.location.reload();
-    }
+    });
 
   });
 
